@@ -7,7 +7,7 @@ This package allows you to allocate instance based on user needs like
 
 ## Usage
 
-    from resource_allocator import ResourceAllocator
+    from solution import ResourceAllocator
     
     instancePrice = {
     "us-east": {
