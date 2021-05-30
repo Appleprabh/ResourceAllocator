@@ -1,4 +1,4 @@
-from resource_allocator import ResourceAllocator
+from solution import ResourceAllocator
 
 instancePrice = {
         "us-east": {
