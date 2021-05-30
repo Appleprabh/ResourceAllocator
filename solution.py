@@ -1,71 +1,68 @@
-instancePrices = {
-    "us-east": {
-        "large": 0.07,
-        "xlarge": 0.09,
-        "2xlarge": 0.1,
-        "4xlarge": 0.3,
-        "8xlarge": 0.7,
-        "10xlarge": 1.8
-    },
-    "us-west": {
-        "large": 0.14,
-        "2xlarge": 0.413,
-        "4xlarge": 0.89,
-        "8xlarge": 1.3,
-        "10xlarge": 2.97
-    }
-}
 
 # This class allocates the resource
 class ResourceAllocator:
     def __init__(self):
         self.instance_price = {}
-        self.instance_cpus = {}
+        self.instance_cpus = {
+            "large": 1,
+            "xlarge": 2,
+            "2xlarge": 4,
+            "4xlarge": 8,
+            "8xlarge": 16,
+            "10xlarge": 32,
+            }
         self.total_cost = 0
         self.server = []
         self.output = []
+        self.instances = {}
 
+    #This function is used to find the low cost server type
     def lowestPriceCalculator(self, instPrice):
         for i in list(instPrice.keys()):
             instPrice[i] = instPrice[i]/self.instance_cpus[i]
         instPricelist = sorted(instPrice.items(), key=lambda x: x[1])
         self.instance_price = dict(instPricelist)
 
+    #This function is used to calculate the price for input cpus
     def calculateServerPrice(self, cpus, location, hours):
         for i in list(self.instance_price.keys()):
             cpuNeed = cpus // self.instance_cpus[i]
             if(cpuNeed != 0):
-                if(i in instancePrices[location]):
+                if(i in self.instances[location]):
                     cpus -= cpuNeed * self.instance_cpus[i]
-                    self.total_cost += ((instancePrices[location]
+                    self.total_cost += ((self.instances[location]
                                          [i]) * hours) * cpuNeed
                     self.server.append((i, cpuNeed))
         self.outputFormatter(location)
 
+    #This is setter for class
     def setters(self):
         self.instance_price = {}
         self.total_cost = 0
         self.server = []
-
+    #This function helps to get the output to format
     def outputFormatter(self, location):
         op = {
             "region": location,
-            "total_cost": "$%.2f" % self.total_cost,
+            "total_cost": float("%.2f" % self.total_cost),
             "server": self.server
         }
         self.output.append(op)
 
+    #This function is used to calculate the number servers it can provide for given price
     def calculatePriceServer(self, price, hours, location):
         self.total_cost = 0
         for i in list(self.instance_price.keys()):
-            cpuNeed = int(price // (instancePrices[location][i] * hours))
+            cpuNeed = int(price // (self.instances[location][i] * hours))
+            # print(self.instances[location][i] *hours, hours)
             if(cpuNeed != 0):
                 self.total_cost += cpuNeed * \
-                    (instancePrices[location][i] * hours)
+                    (self.instances[location][i] * hours)
                 self.server.append((i, cpuNeed))
-                price -= cpuNeed * (instancePrices[location][i] * hours)
+                price -= cpuNeed * (self.instances[location][i] * hours)
         self.outputFormatter(location)
 
+    #This function is used to calculate both cpus and price within the limit
     def server_price_hours(self, price, hours, cpus, location):
         self.total_cost = 0
         temp = 0
@@ -73,62 +70,58 @@ class ResourceAllocator:
         for i in list(self.instance_price.keys()):
             cpuNeed = tempCpu // self.instance_cpus[i]
             if(cpuNeed != 0):
-                temp += cpuNeed * (instancePrices[location][i] * hours)
+                temp += cpuNeed * (self.instances[location][i] * hours)
                 if(temp <= price):
                     self.server.append((i, cpuNeed))
                     tempCpu -= cpuNeed * self.instance_cpus[i]
                 else:
-                    temp -= cpuNeed * (instancePrices[location][i] * hours)
+                    temp -= cpuNeed * (self.instances[location][i] * hours)
         self.total_cost = temp
         if(len(self.server) == 0 or tempCpu != 0):
             return
         else:
             self.outputFormatter(location)
 
-    def get_costs(self, **kwargs):
-        self.instance_cpus = kwargs["instances"]
+
+    #This helps to format the output with dollar sign
+    def finalFormatter(self):
+        for i in self.output:
+            i["total_cost"] = "$"+str(i["total_cost"])
+
+    #This function helps to sort the total cost
+    def sorter(self):
+        size = len(self.output)
+        for i in range(size):
+            min_index = i
+            for j in range(i + 1, size):
+                if(self.output[min_index]["total_cost"] > self.output[j]["total_cost"]):
+                    min_index = j
+            self.output[i], self.output[min_index] = self.output[min_index], self.output[i]
+        self.finalFormatter()
+
+    #This function helps to redirect as per needs
+    def get_costs(self,instances=None, hours=None, cpus=None, price=None):
+        self.instances = instances.copy()
         self.output = []
-        if("cpus" in kwargs and "hours" in kwargs and "price" not in kwargs):
-            for i in list(instancePrices.keys()):
+        # print("here")
+        if(cpus is not None and hours is not None and price is None):
+            for i in list(instances.keys()):
                 self.setters()
-                self.lowestPriceCalculator(instancePrices[i].copy())
-                self.calculateServerPrice(kwargs["cpus"], i, kwargs["hours"])
-
-        elif("price" in kwargs and "hours" in kwargs and "cpus" not in kwargs):
-            for i in list(instancePrices.keys()):
+                self.lowestPriceCalculator(instances[i].copy())
+                self.calculateServerPrice(cpus, i, hours)
+        elif(price is not None and hours is not None and cpus is None):
+            for i in list(instances.keys()):
                 self.setters()
-                self.lowestPriceCalculator(instancePrices[i].copy())
-                self.calculatePriceServer(kwargs["price"], kwargs["hours"], i)
-        elif("price" in kwargs and "hours" in kwargs and "cpus" in kwargs):
-            for i in list(instancePrices.keys()):
+                self.lowestPriceCalculator(instances[i].copy())
+                self.calculatePriceServer(price, hours, i)
+        elif(cpus is not None and hours is not None and price is not None):
+            for i in list(instances.keys()):
                 self.setters()
-                self.lowestPriceCalculator(instancePrices[i].copy())
-                self.server_price_hours(
-                    kwargs["price"], kwargs["hours"], kwargs["cpus"], i)
-        print(self.output)
+                self.lowestPriceCalculator(instances[i].copy())
+                # print(self.instance_price)
+                self.server_price_hours(price, hours, cpus, i)
+        self.sorter()
+        return self.output
 
 
-def main():
-    instanceCpus = {
-        "large": 1,
-        "xlarge": 2,
-        "2xlarge": 4,
-        "4xlarge": 8,
-        "8xlarge": 16,
-        "10xlarge": 32,
-    }
 
-    resourceAllocator = ResourceAllocator()
-    print("Testcase: 1")
-    resourceAllocator.get_costs(
-        cpus=135, hours=24, instances=instanceCpus)
-    print("\nTestcase: 2")
-    resourceAllocator.get_costs(
-        price=38, hours=5, instances=instanceCpus)
-    print("\nTestcase: 3")
-    resourceAllocator.get_costs(
-        cpus=180, hours=6, price=65, instances=instanceCpus)
-
-
-if(__name__ == "__main__"):
-    main()
